@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.example.kitaa_king",
+    "sha256_cert_fingerprints": ["1B:51:A2:C5:51:8B:5F:DD:54:34:49:5C:D5:56:48:05:5B:CE:EE:91:7A:E9:D5:9A:FE:3B:55:6D:76:13:75:85"]
+  }
+}]
