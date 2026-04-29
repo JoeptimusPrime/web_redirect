@@ -23,19 +23,9 @@
             max-width: 400px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.2);
         }
-        .logo {
-            font-size: 48px;
-            margin-bottom: 16px;
-        }
-        h1 {
-            color: #1a237e;
-            margin-bottom: 16px;
-        }
-        p {
-            color: #666;
-            margin-bottom: 24px;
-            line-height: 1.5;
-        }
+        .logo { font-size: 48px; margin-bottom: 16px; }
+        h1 { color: #1a237e; margin-bottom: 16px; }
+        p { color: #666; margin-bottom: 24px; line-height: 1.5; }
         .btn {
             background: #1a237e;
             color: white;
@@ -48,22 +38,14 @@
             display: inline-block;
             margin: 8px;
         }
-        .btn:hover {
-            background: #283593;
-        }
+        .btn:hover { background: #283593; }
         .btn-outline {
             background: transparent;
             color: #1a237e;
             border: 2px solid #1a237e;
         }
-        .btn-outline:hover {
-            background: #f0f0f0;
-        }
-        .auto-redirect {
-            margin-top: 24px;
-            font-size: 12px;
-            color: #999;
-        }
+        .btn-outline:hover { background: #f0f0f0; }
+        .auto-redirect { margin-top: 24px; font-size: 12px; color: #999; }
         .error {
             background: #ffebee;
             color: #c62828;
@@ -72,6 +54,16 @@
             margin-top: 16px;
             font-size: 14px;
         }
+        .debug {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 12px;
+            font-size: 11px;
+            word-break: break-all;
+            text-align: left;
+        }
     </style>
 </head>
 <body>
@@ -79,108 +71,127 @@
         <div class="logo">🛍️</div>
         <h1>Kitaa King</h1>
         <p id="message">Processing your request...</p>
-        
-        <a href="com.example.kitaa_king://login-callback" class="btn" id="redirectBtn" style="display: none;">
+
+        <button class="btn" id="redirectBtn" style="display: none;" onclick="openApp()">
             Open App
-        </a>
-        
+        </button>
         <button class="btn btn-outline" onclick="copyLink()" id="copyBtn" style="display: none;">
             Copy Link
         </button>
-        
+
         <div class="auto-redirect" id="autoMsg" style="display: none;">
-            Redirecting automatically in <span id="countdown">5</span> seconds...
+            Redirecting in <span id="countdown">3</span> seconds...
         </div>
-        
-        <div id="errorMsg" class="error" style="display: none;">
-            Unable to open app automatically. Please click the button above.
-        </div>
+        <div id="errorMsg" class="error" style="display: none;"></div>
+        <div class="debug" id="debugPanel"></div>
     </div>
 
     <script>
-        // Get the full URL with all parameters
-        const fullUrl = window.location.href;
-        console.log('Full URL:', fullUrl);
-        
-        // Extract token from URL (supports both # and ?)
-        let token = null;
-        
-        // Check for hash (#) fragment
-        if (window.location.hash) {
-            token = window.location.hash.substring(1);
-            console.log('Token from hash:', token);
+        // ─── READ TOKENS ─────────────────────────────────────────────────────────
+        //
+        // Supabase inatuma tokens kwa njia mbili kulingana na auth flow:
+        //
+        // 1. PKCE flow (AuthFlowType.pkce) — App yako inatumia hii:
+        //    URL: https://kitaaredirect.netlify.app?code=XXXX
+        //    → code iko kwenye QUERY PARAMS (?code=xxx)
+        //
+        // 2. Implicit flow (zamani):
+        //    URL: https://kitaaredirect.netlify.app#access_token=xxx&refresh_token=yyy
+        //    → tokens ziko kwenye HASH (#access_token=xxx)
+        //
+        // Tunashughulikia ZOTE MBILI hapa:
+
+        const queryParams = new URLSearchParams(window.location.search);
+        const hashParams  = new URLSearchParams(window.location.hash.substring(1));
+
+        // PKCE: code kwenye query
+        const pkceCode = queryParams.get('code');
+
+        // Implicit: tokens kwenye hash
+        const accessToken  = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const type         = hashParams.get('type') || queryParams.get('type') || 'magiclink';
+        const errorDesc    = hashParams.get('error_description') || queryParams.get('error_description');
+
+        // ─── BUILD DEEP LINK ─────────────────────────────────────────────────────
+        function buildDeepLink() {
+            const base = 'com.example.kitaa_king://login-callback';
+
+            if (pkceCode) {
+                // PKCE: Peleka code kwa Flutter — Flutter itaita exchangeCodeForSession()
+                return base + '?code=' + encodeURIComponent(pkceCode) + '&type=' + encodeURIComponent(type);
+            }
+
+            if (accessToken && refreshToken) {
+                // Implicit: Peleka tokens kamili kwa Flutter
+                return base +
+                    '#access_token=' + encodeURIComponent(accessToken) +
+                    '&refresh_token=' + encodeURIComponent(refreshToken) +
+                    '&type=' + encodeURIComponent(type);
+            }
+
+            // Hakuna chochote — fungua app bila token
+            return base;
         }
-        
-        // Check for query parameters (?)
-        if (!token) {
-            const urlParams = new URLSearchParams(window.location.search);
-            token = urlParams.get('access_token') || urlParams.get('confirmation_token') || urlParams.get('token');
-            console.log('Token from query:', token);
-        }
-        
-        // Function to open app with deep link
+
         function openApp() {
-            window.location.href = 'com.example.kitaa_king://login-callback';
+            const link = buildDeepLink();
+            console.log('Opening:', link);
+            window.location.href = link;
         }
-        
-        // Update UI based on token presence
-        const messageEl = document.getElementById('message');
+
+        function copyLink() {
+            navigator.clipboard.writeText(buildDeepLink()).then(() => {
+                alert('Link copied!');
+            });
+        }
+
+        // ─── DEBUG PANEL (Ondoa kabla ya production) ─────────────────────────────
+        document.getElementById('debugPanel').innerHTML =
+            '<strong>Debug:</strong><br>' +
+            'pkce_code: ' + (pkceCode ? pkceCode.substring(0, 20) + '...' : 'NOT FOUND') + '<br>' +
+            'access_token: ' + (accessToken ? accessToken.substring(0, 20) + '...' : 'NOT FOUND') + '<br>' +
+            'refresh_token: ' + (refreshToken ? 'FOUND' : 'NOT FOUND') + '<br>' +
+            'type: ' + type + '<br>' +
+            'error: ' + (errorDesc || 'none');
+
+        // ─── UI LOGIC ─────────────────────────────────────────────────────────────
+        const messageEl   = document.getElementById('message');
         const redirectBtn = document.getElementById('redirectBtn');
-        const copyBtn = document.getElementById('copyBtn');
-        const autoMsg = document.getElementById('autoMsg');
-        
-        if (token) {
-            // Valid token found - auto redirect
+        const copyBtn     = document.getElementById('copyBtn');
+        const autoMsg     = document.getElementById('autoMsg');
+        const errorMsg    = document.getElementById('errorMsg');
+
+        if (errorDesc) {
+            messageEl.textContent = 'There was a problem with your link.';
+            errorMsg.style.display = 'block';
+            errorMsg.textContent = errorDesc;
+
+        } else if (pkceCode || (accessToken && refreshToken)) {
+            // ✅ Token au code imepatikana — redirect moja kwa moja
             messageEl.innerHTML = 'Login successful!<br>Redirecting you to the app...';
-            
-            // Show button just in case
             redirectBtn.style.display = 'inline-block';
-            copyBtn.style.display = 'inline-block';
-            autoMsg.style.display = 'block';
-            
-            // Auto redirect after 3 seconds
-            let countdown = 3;
-            const countdownEl = document.getElementById('countdown');
-            const interval = setInterval(() => {
-                countdown--;
-                if (countdownEl) countdownEl.textContent = countdown;
-                if (countdown <= 0) {
-                    clearInterval(interval);
-                    openApp();
-                }
+            copyBtn.style.display    = 'inline-block';
+            autoMsg.style.display    = 'block';
+
+            // Jaribio la kwanza baada ya ms 800 (kwa app inayofanya kazi)
+            setTimeout(openApp, 800);
+
+            // Countdown kwa jaribio la pili (cold start)
+            let count = 3;
+            const countEl = document.getElementById('countdown');
+            const timer = setInterval(() => {
+                count--;
+                if (countEl) countEl.textContent = count;
+                if (count <= 0) { clearInterval(timer); openApp(); }
             }, 1000);
-            
-            // Manual redirect
-            redirectBtn.onclick = function(e) {
-                clearInterval(interval);
-                openApp();
-                return false;
-            };
+
         } else {
-            // No token found - show error but still provide button
             messageEl.innerHTML = 'Welcome to Kitaa King!<br>Click below to open the app.';
             redirectBtn.style.display = 'inline-block';
-            copyBtn.style.display = 'inline-block';
-            
-            document.getElementById('errorMsg').style.display = 'block';
-            
-            redirectBtn.onclick = function(e) {
-                openApp();
-                return false;
-            };
-        }
-        
-        // Copy deep link
-        function copyLink() {
-            navigator.clipboard.writeText('com.example.kitaa_king://login-callback');
-            alert('Link copied! You can now open it manually.');
-        }
-        
-        // Also try to open app immediately if it's a direct redirect
-        if (fullUrl.includes('access_token') || fullUrl.includes('confirmation_token')) {
-            setTimeout(() => {
-                openApp();
-            }, 500);
+            copyBtn.style.display    = 'inline-block';
+            errorMsg.style.display   = 'block';
+            errorMsg.textContent     = 'No token found. Please click the magic link from your email again.';
         }
     </script>
 </body>
